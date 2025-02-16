@@ -1,0 +1,131 @@
+name: "CoreXY Plotter"
+board: TMC2209 4X
+meta: "J0"
+
+stepping:
+    engine: RMT
+    idle_ms: 255
+    pulse_us: 2
+    dir_delay_us: 1
+    disable_delay_us: 0
+
+axes:
+    shared_stepper_disable_pin: gpio.25:high
+    x:
+        steps_per_mm: 80
+        max_rate_mm_per_min: 5000
+        acceleration_mm_per_sec2: 500
+        max_travel_mm: 148
+        soft_limits: true
+        homing:
+            cycle: 1
+            mpos_mm: 148
+            positive_direction: true
+            feed_mm_per_min: 400
+            seek_mm_per_min: 1200
+            settle_ms: 200
+
+        motor0:
+            tmc_2209:
+                uart_num: 1
+                addr: 0
+                r_sense_ohms: 0.110
+                run_amps: 0.800
+                hold_amps: 0.400
+                microsteps: 16
+                stallguard: 0
+                stallguard_debug: false
+                toff_disable: 0
+                toff_stealthchop: 5
+                toff_coolstep: 3
+                run_mode: StealthChop
+                homing_mode: StealthChop
+                use_enable: false
+                step_pin: gpio.26
+                direction_pin: gpio.27
+                disable_pin: NO_PIN
+
+    y:
+        steps_per_mm: 80
+        max_rate_mm_per_min: 5000
+        acceleration_mm_per_sec2: 500
+        max_travel_mm: 210
+        soft_limits: true
+        homing:
+            cycle: 2
+            mpos_mm: 210
+            positive_direction: true
+            feed_mm_per_min: 400
+            seek_mm_per_min: 1200
+            settle_ms: 200
+
+        motor0:
+            tmc_2209:
+                uart_num: 1
+                addr: 1
+                r_sense_ohms: 0.110
+                run_amps: 0.800
+                hold_amps: 0.400
+                microsteps: 16
+                stallguard: 0
+                stallguard_debug: false
+                toff_disable: 0
+                toff_stealthchop: 5
+                toff_coolstep: 3
+                run_mode: StealthChop
+                homing_mode: StealthChop
+                use_enable: false
+                step_pin: gpio.33
+                direction_pin: gpio.14
+                disable_pin: NO_PIN
+
+    z:
+        servo:
+            pin: gpio.32
+            min_pulse_us: 500
+            max_pulse_us: 2500
+            min_angle: 0
+            max_angle: 90
+
+kinematics:
+    corexy:
+        motor0:
+            steps: gpio.26
+            direction: gpio.27
+            disable: NO_PIN
+        motor1:
+            steps: gpio.33
+            direction: gpio.14
+            disable: NO_PIN
+
+stepper_drivers:
+    x:
+        tmc_2209:
+            uart:
+                txd_pin: no_pin
+                rxd_pin: no_pin
+            r_sense_ohms: 0.110
+            run_amps: 0.800
+            hold_amps: 0.400
+            microsteps: 16
+
+    y:
+        tmc_2209:
+            uart:
+                txd_pin: no_pin
+                rxd_pin: no_pin
+            r_sense_ohms: 0.110
+            run_amps: 0.800
+            hold_amps: 0.400
+            microsteps: 16
+
+uart1:
+    txd_pin: gpio.17
+    rxd_pin: gpio.16
+    rts_pin: NO_PIN
+    cts_pin: NO_PIN
+    baud: 115200
+    mode: 8N1
+
+start:
+    must_home: false
