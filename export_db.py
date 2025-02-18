@@ -4,7 +4,6 @@ import csv
 import time
 from datetime import datetime
 
-# Initialize Firebase if needed
 try:
     db = firestore.client()
 except:
@@ -15,14 +14,11 @@ except:
 def export_quotes_to_csv():
     """Export all quotes to a CSV file with relevant fields"""
     try:
-        # Get all quotes
-        quotes = db.collection("quotes").stream()
+        quotes = db.collection("quotes_v1").stream()
         
-        # Create filename with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"quotes_export_{timestamp}.csv"
         
-        # Define CSV fields
         fields = ['quote_id', 'text', 'article_title', 'source', 'manual_score', 'notes']
         
         with open(filename, 'w', newline='', encoding='utf-8') as file:
@@ -33,14 +29,13 @@ def export_quotes_to_csv():
             for quote in quotes:
                 quote_data = quote.to_dict()
                 
-                # Write row with empty columns for manual scoring
                 writer.writerow({
                     'quote_id': quote.id,
                     'text': quote_data.get('text', ''),
                     'article_title': quote_data.get('article_title', ''),
                     'source': quote_data.get('source', ''),
-                    'manual_score': '',  # Empty column for manual scoring
-                    'notes': ''         # Empty column for notes
+                    'manual_score': '',  
+                    'notes': ''        
                 })
                 
                 quote_count += 1

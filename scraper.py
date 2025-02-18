@@ -1,31 +1,21 @@
+from firebase_init import db
+from google.cloud import firestore
+from quote_extractor import QuoteExtractor
 import requests
 from bs4 import BeautifulSoup
-import json
-import firebase_admin
-from firebase_admin import credentials, firestore
 import time
 from requests.exceptions import RequestException, Timeout
-from quote_extractor import QuoteExtractor
 
-cred = credentials.Certificate("creds.json")
-firebase_admin.initialize_app(cred)
-db = firestore.client()
+COLLECTION = "quotes_v1" 
+KEYWORDS = ["war", "fight", "fighting", "hostage", "hostages", "prisoner", "prisoners", "conflict", "battle", "survivor", "survivors"]
 
 quote_extractor = QuoteExtractor()
 
-KEYWORDS = ["war", "fight", "fighting", "hostage", "hostages", "prisoner", "prisoners", "conflict", "battle", "survivor", "survivors"]
-
-# Focus on reliable free news sources
 NEWS_SITES = {
     "BBC": {
         "url": "https://www.bbc.com/news",
         "article_link_pattern": "/news/",
         "base_url": "https://www.bbc.com"
-    },
-    "Reuters": {
-        "url": "https://www.reuters.com/world/",
-        "article_link_pattern": "/world/",
-        "base_url": "https://www.reuters.com"
     },
     "NPR": {
         "url": "https://www.npr.org/sections/world/",
@@ -36,7 +26,12 @@ NEWS_SITES = {
         "url": "https://apnews.com/hub/world-news",
         "article_link_pattern": "/article/",
         "base_url": "https://apnews.com"
-    }
+    },
+    "The Guardian": {
+        "url": "https://www.theguardian.com/world",
+        "article_link_pattern": "/world/",
+        "base_url": "https://www.theguardian.com"
+    },
 }
 
 def get_article_links(site_name, site_config, timeout=10):
@@ -79,18 +74,10 @@ def get_article_links(site_name, site_config, timeout=10):
     except Exception as e:
         print(f"Unexpected error scraping {site_name}: {e}")
         return []
+    
 
-def check_article_exists(url):
-    """Check if article already exists in Firebase"""
-    try:
-        docs = db.collection("news_articles").where("url", "==", url).limit(1).get()
-        return len(docs) > 0
-    except Exception as e:
-        print(f"Error checking article existence: {e}")
-        return False
 
 def scrape_article(url, site_name, timeout=10):
-    """Scrapes individual article with improved title extraction"""
     try:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
@@ -110,17 +97,23 @@ def scrape_article(url, site_name, timeout=10):
             
         title = title_element.text.strip() if title_element else "No title"
         
-        # Skip if title looks invalid
-        if title in ["NewsNews", "No title", "Business", "Analysis", "Art & Design", "Movies", "Climate"]:
+        invalid_titles = {
+            "Business", "Climate", "Sport", "Technology", "Entertainment",
+            "NewsNews", "No title", 
+            "Analysis", "Art & Design", "Movies", "Opinion", "Review",
+            "Menu", "Navigation", "Search"
+        }
+        
+        if (title in invalid_titles or 
+            len(title) < 10 or 
+            any(section in title for section in ["Section", "Category", "Page"])):
             print(f"Skipping article with invalid title: {title}")
             return None
         
-        # Get content
         paragraphs = soup.find_all("p")
         content = " ".join([p.text.strip() for p in paragraphs])
         
-        # Validate content
-        if len(content) < 100:  # Skip if content is too short
+        if len(content) < 300: 
             print(f"Skipping article with insufficient content: {title}")
             return None
             
@@ -134,114 +127,86 @@ def search_keywords(article):
     if not article:
         return None
         
-    # Convert article content and title to lowercase for case-insensitive matching
     content = article["content"].lower()
     title = article["title"].lower()
     
-    # Search in both title and content
-    matches = []
-    for kw in KEYWORDS:
-        kw = kw.lower()
-        if kw in content or kw in title:
-            matches.append(kw)
-            
-    # Debug output to verify matches
+    matches = {kw for kw in KEYWORDS if kw.lower() in content or kw.lower() in title}
+    
     if matches:
         print(f"Found keywords {matches} in article: {article['title']}")
-    
-    return matches if matches else None
+        return list(matches)
+    return None
 
-def store_in_firebase(article, matched_terms, source):
-    """Stores article and its quotes in Firebase using batch write."""
-    try:
-        batch = db.batch()
-        
-        # Store article
-        article_ref = db.collection("news_articles").document()
-        article_id = article_ref.id
-        
-        batch.set(article_ref, {
-            "title": article["title"],
-            "url": article["url"],
-            "content": article["content"],
-            "matched_terms": matched_terms,
-            "source": source,
-            "timestamp": firestore.SERVER_TIMESTAMP,
-            "processed": False,
-            "plotted": False
-        })
-        
-        # Extract and store quotes using the QuoteExtractor
-        quotes = quote_extractor.extract_quotes(article["content"])
-        for quote in quotes:
-            quote_ref = db.collection("quotes").document()
+
+    
+
+def check_quote_exists(quote_text):
+    """Check if quote already exists in Firebase"""
+    docs = db.collection(COLLECTION).where("text", "==", quote_text).limit(1).get()
+    return len(docs) > 0
+
+def store_quotes(quotes, article_info, source):
+    """Store new quotes in Firebase"""
+    batch = db.batch()
+    stored_count = 0
+
+    for quote in quotes:
+        if not check_quote_exists(quote):
+            quote_ref = db.collection(COLLECTION).document()
             batch.set(quote_ref, {
                 "text": quote,
-                "article_id": article_id,
-                "article_title": article["title"],
+                "article_url": article_info["url"],
+                "article_title": article_info["title"],
                 "source": source,
                 "timestamp": firestore.SERVER_TIMESTAMP,
-                "plotted": False
+                "score": None,
+                "processed": False
             })
-        
-        # Commit the batch
+            stored_count += 1
+
+    if stored_count > 0:
         batch.commit()
-        
-        print(f"Stored article: {article['title']} with {len(quotes)} quotes")
-        return True
-        
-    except Exception as e:
-        print(f"Error storing in Firebase: {e}")
-        return False
+        print(f"Stored {stored_count} new quotes from: {article_info['title']}")
+    
+    return stored_count
 
 def main():
-    articles_processed = 0
+    quotes_processed = 0
     
     for site_name, site_config in NEWS_SITES.items():
         try:
             print(f"\nProcessing {site_name}...")
             article_links = get_article_links(site_name, site_config)
             
-            # Process all articles
             for link in article_links:
                 try:
-                    # Skip if article already exists
-                    if check_article_exists(link):
-                        print(f"Skipping existing article: {link}")
-                        continue
-                        
-                    # Add delay between requests
-                    time.sleep(2)
+                    time.sleep(2) 
                     
                     article = scrape_article(link, site_name)
                     if article:
                         matched_terms = search_keywords(article)
                         if matched_terms:
-                            if store_in_firebase(article, matched_terms, site_name):
-                                articles_processed += 1
+                            quotes = quote_extractor.extract_quotes(article["content"])
+                            if quotes:
+                                article_info = {
+                                    "url": article["url"],
+                                    "title": article["title"]
+                                }
+                                quotes_processed += store_quotes(quotes, article_info, site_name)
                         else:
-                            print(f"Skipped: {article['title']} (No keyword matches)")
+                            print(f"No relevant keywords found in: {article['title']}")
+                            
                 except Exception as e:
                     print(f"Error processing article {link}: {e}")
                     continue
                 
-            # Add delay between sites
             time.sleep(5)
             
-        except KeyboardInterrupt:
-            print(f"\nStopping gracefully at {site_name}...")
-            break
         except Exception as e:
             print(f"Error processing site {site_name}: {e}")
-            print("Moving to next site...")
             continue
     
-    print(f"\nScript completed. Processed {articles_processed} articles.")
+    print(f"\nScript completed. Processed {quotes_processed} new quotes.")
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print("\nScript stopped by user")
-    except Exception as e:
-        print(f"Unexpected error: {e}")
+    main()
