@@ -1,5 +1,6 @@
 # config file
 creds.json
+.env
 
 # Firebase build and deployment files
 /firebase-debug.log
