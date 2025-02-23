@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+from config import QUOTES_COLLECTION, KEYWORDS
 from firebase_init import db
 from quote_extractor import QuoteExtractor
 import requests
@@ -7,12 +8,11 @@ from google.cloud import firestore
 
 load_dotenv()
 
-COLLECTION_NAME = "quotes_v1"
+COLLECTION_NAME = QUOTES_COLLECTION
 GUARDIAN_API_KEY = os.getenv('GUARDIAN_API_KEY')
 if not GUARDIAN_API_KEY:
     raise ValueError("GUARDIAN_API_KEY not found in environment variables")
 
-KEYWORDS = ["war", "fight", "fighting", "hostage", "hostages", "prisoner", "prisoners", "conflict", "battle", "survivor", "survivors"]
 
 class GuardianCollector:
     def __init__(self):
@@ -26,7 +26,7 @@ class GuardianCollector:
                 'api-key': GUARDIAN_API_KEY,
                 'section': 'world',
                 'show-fields': 'bodyText,headline',  
-                'page-size': 25, 
+                'page-size': 5, 
                 'order-by': 'newest',
                 'show-tags': 'keyword'
             }

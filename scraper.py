@@ -1,13 +1,13 @@
 from firebase_init import db
 from google.cloud import firestore
+from config import QUOTES_COLLECTION, KEYWORDS
 from quote_extractor import QuoteExtractor
 import requests
 from bs4 import BeautifulSoup
 import time
 from requests.exceptions import RequestException, Timeout
 
-COLLECTION = "quotes_v1" 
-KEYWORDS = ["war", "fight", "fighting", "hostage", "hostages", "prisoner", "prisoners", "conflict", "battle", "survivor", "survivors"]
+COLLECTION = QUOTES_COLLECTION
 
 quote_extractor = QuoteExtractor()
 
@@ -89,12 +89,7 @@ def scrape_article(url, site_name, timeout=10):
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
         
-        # Special handling for BBC (only exception needed)
-        if site_name == "BBC":
-            title_element = soup.find("h1", {"id": "main-heading"})
-        else:
-            title_element = soup.find("h1")
-            
+        title_element = soup.find("h1")
         title = title_element.text.strip() if title_element else "No title"
         
         invalid_titles = {
@@ -172,11 +167,15 @@ def store_quotes(quotes, article_info, source):
 
 def main():
     quotes_processed = 0
+    max_articles_per_site = 20
     
     for site_name, site_config in NEWS_SITES.items():
         try:
             print(f"\nProcessing {site_name}...")
             article_links = get_article_links(site_name, site_config)
+            
+            article_links = article_links[:max_articles_per_site]
+            print(f"Processing {len(article_links)} articles from {site_name}")
             
             for link in article_links:
                 try:
@@ -207,6 +206,7 @@ def main():
             continue
     
     print(f"\nScript completed. Processed {quotes_processed} new quotes.")
+    return quotes_processed
 
 if __name__ == "__main__":
     main()

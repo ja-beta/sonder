@@ -1,5 +1,6 @@
 from openai import OpenAI
 from dotenv import load_dotenv
+from config import MODEL_ID
 import os
 
 load_dotenv()
@@ -22,7 +23,7 @@ def evaluate_quote(quote, model_id):
     
 
 def test_quotes():
-    model_id = "ft:gpt-3.5-turbo-0125:personal::B2QGxish"
+    model_id = MODEL_ID
 
     test_quotes = [
         "I'm still alive, dad",
