@@ -1,5 +1,5 @@
 # Database
-QUOTES_COLLECTION = "quotes_v3"
+QUOTES_COLLECTION = "quotes_v4"
 
 KEYWORDS = ["war", "fight", "fighting", "hostage", "hostages", "prisoner", "prisoners", "conflict", "battle", "survivor", "survivors"]
 

@@ -1,11 +1,14 @@
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials
+from firebase_admin import firestore
 
 def initialize_firebase():
-    """Initialize Firebase if not already initialized"""
-    if not firebase_admin._apps:
-        cred = credentials.Certificate("creds.json")
-        firebase_admin.initialize_app(cred)
-    return firestore.client()
+    try:
+        firebase_admin.initialize_app()
+        db = firestore.client()
+        return db
+    except Exception as e:
+        print(f"Error initializing Firebase: {e}")
+        return None
 
 db = initialize_firebase()

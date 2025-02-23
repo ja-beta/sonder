@@ -1,0 +1,6 @@
+functions-framework==3.*
+firebase-admin
+openai
+python-dotenv
+requests
+beautifulsoup4

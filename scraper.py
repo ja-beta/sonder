@@ -167,7 +167,7 @@ def store_quotes(quotes, article_info, source):
 
 def main():
     quotes_processed = 0
-    max_articles_per_site = 20
+    max_articles_per_site = 2
     
     for site_name, site_config in NEWS_SITES.items():
         try:
