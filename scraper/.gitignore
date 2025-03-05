@@ -30,3 +30,7 @@ yarn-error.log*
 
 # Environment files (local configs)
 /.env.*
+
+#arduino
+Microcontroller/e-paper-03/secrets.h
+secrets.h

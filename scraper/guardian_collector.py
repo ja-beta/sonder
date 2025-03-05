@@ -9,10 +9,9 @@ from google.cloud import firestore
 load_dotenv()
 
 COLLECTION_NAME = QUOTES_COLLECTION
-GUARDIAN_API_KEY = os.getenv('GUARDIAN_API_KEY')
-if not GUARDIAN_API_KEY:
-    raise ValueError("GUARDIAN_API_KEY not found in environment variables")
 
+# Get API key but don't fail immediately
+GUARDIAN_API_KEY = os.environ.get("GUARDIAN_API_KEY")
 
 class GuardianCollector:
     def __init__(self):
@@ -130,6 +129,10 @@ class GuardianCollector:
         return quotes_processed
 
 def main():
+    # Only check for API key when this function is actually called
+    if not GUARDIAN_API_KEY:
+        raise ValueError("GUARDIAN_API_KEY not found in environment variables")
+    
     collector = GuardianCollector()
     collector.run()
 
