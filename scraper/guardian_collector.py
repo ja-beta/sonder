@@ -72,24 +72,38 @@ class GuardianCollector:
             return None, None
     
     def store_quotes(self, quotes, article_info):
-        """Store quotes in Firebase"""
+        """Store quotes in Firebase with duplicate prevention"""
         batch = db.batch()
         stored_count = 0
-
-        for quote in quotes:
+        
+        # Normalize quotes
+        normalized_quotes = [q.strip() for q in quotes]
+        
+        # Check for existing quotes
+        existing_quotes = set()
+        for quote in normalized_quotes:
             docs = db.collection(COLLECTION_NAME).where("text", "==", quote).limit(1).get()
-            if not len(docs):
-                quote_ref = db.collection(COLLECTION_NAME).document()
-                batch.set(quote_ref, {
-                    "text": quote,
-                    "article_url": article_info["url"],
-                    "article_title": article_info["title"],
-                    "source": "The Guardian",
-                    "timestamp": firestore.SERVER_TIMESTAMP,
-                    "score": None,
-                    "processed": False
-                })
-                stored_count += 1
+            if len(docs) > 0:
+                existing_quotes.add(quote)
+
+        # Process unique quotes
+        for quote in normalized_quotes:
+            if quote in existing_quotes or not quote:
+                continue
+            
+            existing_quotes.add(quote)
+            
+            quote_ref = db.collection(COLLECTION_NAME).document()
+            batch.set(quote_ref, {
+                "text": quote,
+                "article_url": article_info["url"],
+                "article_title": article_info["title"],
+                "source": "The Guardian",
+                "timestamp": firestore.SERVER_TIMESTAMP,
+                "score": None,
+                "processed": False
+            })
+            stored_count += 1
 
         if stored_count > 0:
             batch.commit()

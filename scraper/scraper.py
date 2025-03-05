@@ -6,6 +6,8 @@ import requests
 from bs4 import BeautifulSoup
 import time
 from requests.exceptions import RequestException, Timeout
+import argparse
+from datetime import datetime, timedelta
 
 COLLECTION = QUOTES_COLLECTION
 
@@ -141,23 +143,40 @@ def check_quote_exists(quote_text):
     return len(docs) > 0
 
 def store_quotes(quotes, article_info, source):
-    """Store new quotes in Firebase"""
+    """Store new quotes in Firebase with improved duplicate detection"""
     batch = db.batch()
     stored_count = 0
-
-    for quote in quotes:
-        if not check_quote_exists(quote):
-            quote_ref = db.collection(COLLECTION).document()
-            batch.set(quote_ref, {
-                "text": quote,
-                "article_url": article_info["url"],
-                "article_title": article_info["title"],
-                "source": source,
-                "timestamp": firestore.SERVER_TIMESTAMP,
-                "score": None,
-                "processed": False
-            })
-            stored_count += 1
+    
+    # Normalize quotes (trim whitespace, standardize case)
+    normalized_quotes = [q.strip() for q in quotes]
+    
+    # Check for existing quotes in the database
+    existing_quotes = set()
+    for quote in normalized_quotes:
+        docs = db.collection(COLLECTION).where("text", "==", quote).limit(1).get()
+        if len(docs) > 0:
+            existing_quotes.add(quote)
+    
+    # Process quotes, avoiding duplicates
+    for quote in normalized_quotes:
+        if quote in existing_quotes or not quote:
+            continue
+            
+        # Add to tracking set to prevent duplicates in this batch
+        existing_quotes.add(quote)
+        
+        # Add to database
+        quote_ref = db.collection(COLLECTION).document()
+        batch.set(quote_ref, {
+            "text": quote,
+            "article_url": article_info["url"],
+            "article_title": article_info["title"],
+            "source": source,
+            "timestamp": firestore.SERVER_TIMESTAMP,
+            "score": None,
+            "processed": False
+        })
+        stored_count += 1
 
     if stored_count > 0:
         batch.commit()
@@ -168,6 +187,7 @@ def store_quotes(quotes, article_info, source):
 def main():
     quotes_processed = 0
     max_articles_per_site = 2
+    processed_urls = set()  
     
     for site_name, site_config in NEWS_SITES.items():
         try:
@@ -178,6 +198,12 @@ def main():
             print(f"Processing {len(article_links)} articles from {site_name}")
             
             for link in article_links:
+                if link in processed_urls:
+                    print(f"Skipping already processed URL: {link}")
+                    continue
+                    
+                processed_urls.add(link)  
+                
                 try:
                     time.sleep(2) 
                     
@@ -208,5 +234,90 @@ def main():
     print(f"\nScript completed. Processed {quotes_processed} new quotes.")
     return quotes_processed
 
+def remove_duplicates():
+    """Remove duplicate quotes from the database"""
+    quotes = {}  
+    
+    # Get all quotes
+    all_quotes = db.collection(COLLECTION).get()
+    
+    # Find duplicates
+    for doc in all_quotes:
+        quote_text = doc.get("text")
+        if quote_text not in quotes:
+            quotes[quote_text] = []
+        quotes[quote_text].append(doc.id)
+    
+    # Delete duplicates (keep the first one of each)
+    batch = db.batch()
+    deleted = 0
+    
+    for text, doc_ids in quotes.items():
+        if len(doc_ids) > 1:
+            # Skip the first one, delete the rest
+            for doc_id in doc_ids[1:]:
+                batch.delete(db.collection(COLLECTION).document(doc_id))
+                deleted += 1
+                
+                # Commit in batches of 500 (Firestore limit)
+                if deleted % 500 == 0:
+                    batch.commit()
+                    batch = db.batch()
+    
+    # Commit any remaining deletes
+    if deleted % 500 != 0:
+        batch.commit()
+        
+    print(f"Removed {deleted} duplicate quotes")
+
+def clean_recent_duplicates(hours=1):
+    """Clean up duplicates from the last few hours only"""
+    # Calculate timestamp from hours ago
+    hours_ago = datetime.now() - timedelta(hours=hours)
+    timestamp = firestore.Timestamp.from_datetime(hours_ago)
+    
+    # Query only recent quotes
+    recent_quotes = db.collection(COLLECTION).where("timestamp", ">=", timestamp).get()
+    print(f"Checking {len(list(recent_quotes))} recent quotes for duplicates")
+    
+    # Track text to document ID mapping
+    quote_map = {}
+    duplicates = []
+    
+    # Find duplicates
+    for doc in recent_quotes:
+        data = doc.to_dict()
+        quote_text = data.get("text", "").strip()
+        
+        if not quote_text:
+            continue
+            
+        if quote_text in quote_map:
+            # This is a duplicate
+            duplicates.append(doc.id)
+        else:
+            quote_map[quote_text] = doc.id
+    
+    # Delete duplicates
+    if duplicates:
+        batch = db.batch()
+        for doc_id in duplicates:
+            batch.delete(db.collection(COLLECTION).document(doc_id))
+        
+        batch.commit()
+        print(f"Removed {len(duplicates)} recent duplicate quotes")
+        return len(duplicates)
+    
+    print("No recent duplicates found")
+    return 0
+
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description='Quote scraper utility')
+    parser.add_argument('--clean', action='store_true', help='Remove duplicate quotes from database')
+    
+    args = parser.parse_args()
+    
+    if args.clean:
+        remove_duplicates()
+    else:
+        main()
