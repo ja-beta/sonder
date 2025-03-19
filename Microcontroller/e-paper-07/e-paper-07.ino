@@ -7,6 +7,10 @@
 #include "secrets.h"
 #include "esp32-hal-ledc.h"
 
+#include <Fonts/FreeMonoBoldOblique9pt7b.h>
+#include <Fonts/FreeMonoBoldOblique12pt7b.h>
+#include <Fonts/FreeMonoBoldOblique18pt7b.h>
+
 #define EPD_CS 5    // Chip Select
 #define EPD_DC 17   // Data/Command
 #define EPD_RST 16  // Reset
@@ -47,6 +51,9 @@ bool isDrawing = false;
 
 int consecutiveDetectionCount = 0;
 bool lastDetectedState = true;
+
+// Add a new command type for text testing
+#define CMD_TEST_TEXT "#TEXT:"
 
 void setup() {
   Serial.begin(115200);
@@ -136,13 +143,26 @@ void loop() {
     }
   }
 
+  // Handle serial commands
   if (Serial.available() > 0) {
     int bytesRead = Serial.readBytesUntil('\n', textBuffer, MAX_TEXT_LENGTH - 1);
-
     textBuffer[bytesRead] = '\0';
 
     if (bytesRead > 0) {
-      if (strcmp(textBuffer, "#QUOTE") == 0) {
+      // Check if it's the test command
+      if (strncmp(textBuffer, CMD_TEST_TEXT, strlen(CMD_TEST_TEXT)) == 0) {
+        // Extract the text part after the command
+        char* textToDisplay = textBuffer + strlen(CMD_TEST_TEXT);
+        
+        // Display the text
+        Serial.print("Testing text: ");
+        Serial.println(textToDisplay);
+        
+        // Display text and report which font was used
+        displayTextWithFontInfo(textToDisplay);
+      }
+      else if (strcmp(textBuffer, "#QUOTE") == 0) {
+        // Existing quote command
         fetchAndDisplayQuote();
       }
       else if (strcmp(textBuffer, "#PARTIAL") == 0) {
@@ -261,70 +281,65 @@ void fetchAndDisplayQuote() {
 }
 
 void displayText(const char* text) {
-  // Set drawing state
   isDrawing = true;
   setLedDrawing();
   
-  // Calculate optimal text size that fits all words
-  int textSize = calculateOptimalTextSize(text);
-  Serial.print("Using text size: ");
-  Serial.println(textSize);
+  // Calculate optimal font
+  const GFXfont* font = calculateOptimalFont(text);
   
   display.setFullWindow();
   display.firstPage();
   
   do {
-    // Clear screen
     display.fillScreen(GxEPD_WHITE);
-    
-    // Display text with word wrapping
-    displayWrappedText(text, textSize);
-    
+    displayWrappedText(text, font);
   } while (display.nextPage());
   
-  // Reset drawing state
   isDrawing = false;
   setLedConnected();
 }
 
-int calculateOptimalTextSize(const char* text) {
-  // Start with largest size and work downward
-  for (int size = 3; size >= 1; size--) {
-    if (allWordsWillFit(text, size)) {
-      return size;
-    }
+const GFXfont* calculateOptimalFont(const char* text) {
+  // Try largest font first, then fall back to smaller ones if needed
+  display.setFont(&FreeMonoBoldOblique18pt7b);
+  if (allWordsWillFit(text)) {
+    return &FreeMonoBoldOblique18pt7b;
   }
-
-  // Fallback to smallest size
-  return 1;
+  
+  display.setFont(&FreeMonoBoldOblique12pt7b);
+  if (allWordsWillFit(text)) {
+    return &FreeMonoBoldOblique12pt7b;
+  }
+  
+  // Default to smallest font if others don't fit
+  return &FreeMonoBoldOblique9pt7b;
 }
 
-// Check if all words will fit at the given text size
-bool allWordsWillFit(const char* text, int textSize) {
+// Check if all words will fit with the currently set font
+bool allWordsWillFit(const char* text) {
   int16_t x1, y1;
   uint16_t w, h;
-
-  display.setTextSize(textSize);
-  int screenWidth = display.width() - 10;  // 5px margin on each side
-
+  
+  int screenWidth = display.width() - 20;  // 10px margin on each side
+  
   // Extract and measure each word
   char word[51];  // Buffer for current word
   int wordLen = 0;
-
+  
   for (int i = 0; i <= strlen(text); i++) {
     if (text[i] == ' ' || text[i] == '\0' || text[i] == '\n') {
       if (wordLen > 0) {
         // Null-terminate the word
         word[wordLen] = '\0';
-
-        // Get word width
+        
+        // Get word width with current font
         display.getTextBounds(word, 0, 0, &x1, &y1, &w, &h);
-
-        // If any word is too wide for the screen, this size won't work
+        
+        // If any word is too wide for the screen, this font won't work
         if (w > screenWidth) {
           return false;
         }
-
+        
         // Reset word buffer
         wordLen = 0;
       }
@@ -335,41 +350,50 @@ bool allWordsWillFit(const char* text, int textSize) {
       }
     }
   }
-
+  
   // Also check if total text will fit vertically
-  // (rough estimate based on character height and line count)
   display.getTextBounds("Ay", 0, 0, &x1, &y1, &w, &h);
-  int lineHeight = h + 2;
-
-  // Estimate number of lines needed (very rough approximation)
+  int lineHeight = h * 1.3;  // 30% extra space between lines
+  
+  // Estimate number of lines needed
   int totalChars = strlen(text);
-  int charsPerLine = screenWidth / (textSize * 6);  // Approximate average char width
+  int charsPerLine = screenWidth / (w / 2);  // Rough estimate
   int estimatedLines = (totalChars / charsPerLine) + 1;
-
+  
   // Check if estimated lines will fit vertically
   return (estimatedLines * lineHeight) < display.height();
 }
 
-// Display text with proper word wrapping
-void displayWrappedText(const char* text, int textSize) {
+// Display wrapped text with custom font - Fixed version
+void displayWrappedText(const char* text, const GFXfont* font) {
+  display.setFont(font);
   display.setTextColor(GxEPD_BLACK);
-  display.setTextSize(textSize);
-
+  
   int16_t x1, y1;
   uint16_t w, h;
-
+  
   // Get character height for line spacing
   display.getTextBounds("Ay", 0, 0, &x1, &y1, &w, &h);
-  int lineHeight = h + 2;
-
-  int screenWidth = display.width() - 16;  // Leaving 5px margin on each side
-  int cursorX = 8;
-  int cursorY = 5 + lineHeight;  // Start position
-
+  int lineHeight = h * 1.3;  // 30% extra space between lines
+  
+  // Determine a proper space width for this font
+  int spaceWidth;
+  if (font == &FreeMonoBoldOblique18pt7b) {
+    spaceWidth = 18;  // Explicit space width for 18pt
+  } else if (font == &FreeMonoBoldOblique12pt7b) {
+    spaceWidth = 13;  // Explicit space width for 12pt
+  } else {
+    spaceWidth = 10;   // Explicit space width for 9pt
+  }
+  
+  int screenWidth = display.width() - 20;  // 10px margin on each side
+  int cursorX = 10;
+  int cursorY = h + 5;  // Start position - add ascender height
+  
   // Variables for word processing
   char word[51];  // Buffer for current word
   int wordLen = 0;
-
+  
   // Process the input text character by character
   for (int i = 0; i <= strlen(text); i++) {
     // End of word or end of text
@@ -377,38 +401,40 @@ void displayWrappedText(const char* text, int textSize) {
       if (wordLen > 0) {
         // Null-terminate the word
         word[wordLen] = '\0';
-
+        
         // Get word width
         display.getTextBounds(word, 0, 0, &x1, &y1, &w, &h);
-
+        
         // Check if word fits on current line
         if (cursorX + w > screenWidth) {
           // Move to next line
-          cursorX = 5;
+          cursorX = 10;
           cursorY += lineHeight;
         }
-
+        
         // Draw the word
         display.setCursor(cursorX, cursorY);
         display.print(word);
-
-        // Advance cursor
+        
+        // Advance cursor by the actual word width
         cursorX += w;
-
+        
         // Add space after word (except at end of text)
         if (text[i] == ' ') {
-          display.print(" ");
-          // Approximate space width
-          cursorX += textSize * 6;
+          // Add explicit space width rather than printing a space
+          cursorX += spaceWidth;
         }
-
+        
         // Reset word buffer
         wordLen = 0;
+      } else if (text[i] == ' ') {
+        // Handle consecutive spaces
+        cursorX += spaceWidth;
       }
-
+      
       // Handle explicit newline
       if (text[i] == '\n') {
-        cursorX = 5;
+        cursorX = 10;
         cursorY += lineHeight;
       }
     } else {
@@ -439,36 +465,29 @@ void updatePartialArea(int x, int y, int w, int h, const char* message) {
 }
 
 bool checkDisplayConnection() {
-  // Save current state for diagnostic
-  int initialBusyState = digitalRead(EPD_BUSY);
+  // First check with pullup
+  int busyState = digitalRead(EPD_BUSY);
   
-  // First, select the display with CS low
+  // If BUSY is high (pullup active), display is definitely disconnected
+  if (busyState == HIGH) {
+    Serial.println("Display DISCONNECTED (BUSY pin high)");
+    return false;
+  }
+  
+  // If BUSY is low, try sending a command to confirm
   digitalWrite(EPD_CS, LOW);
-  delay(1);  // Give it a moment
-  
-  // Send a harmless command (0x71 = get status)
-  digitalWrite(EPD_DC, LOW);  // Command mode
-  SPI.transfer(0x71);         // Get status command
+  digitalWrite(EPD_DC, LOW);
+  SPI.transfer(0x71);  // Get status
+  digitalWrite(EPD_CS, HIGH);
   
   delay(5);
   
-  int busyStateAfterCommand = digitalRead(EPD_BUSY);
+  // Check BUSY state again
+  busyState = digitalRead(EPD_BUSY);
+  bool connected = (busyState == LOW);
   
-  digitalWrite(EPD_CS, HIGH);
-  
-  delay(10);
-  int finalBusyState = digitalRead(EPD_BUSY);
-  
-  bool connected = (initialBusyState == 0) && 
-                  (busyStateAfterCommand == 0) && 
-                  (finalBusyState == 0);
-  
-  Serial.print("Display detection - BUSY states: ");
-  Serial.print(initialBusyState);
-  Serial.print(" → ");
-  Serial.print(busyStateAfterCommand);
-  Serial.print(" → ");
-  Serial.print(finalBusyState);
+  Serial.print("Display detection - BUSY after command: ");
+  Serial.print(busyState);
   Serial.print(" - Display ");
   Serial.println(connected ? "CONNECTED" : "DISCONNECTED");
   
@@ -508,4 +527,52 @@ void setLedDisconnected() {
 
 void setLedDrawing() {
   setLedColor(255, 5, 5);  
+}
+
+void testFontSizes() {
+  // Short quote - should use 18pt
+  displayText("Life is short. Make it count.");
+  delay(5000);
+  
+  // Medium quote - should use 12pt
+  displayText("The future belongs to those who believe in the beauty of their dreams. -Eleanor Roosevelt");
+  delay(5000);
+  
+  // Longer quote - should use 9pt
+  displayText("The only way to do great work is to love what you do. If you haven't found it yet, keep looking. Don't settle. As with all matters of the heart, you'll know when you find it. -Steve Jobs");
+}
+
+// New function to display text and report font information
+void displayTextWithFontInfo(const char* text) {
+  isDrawing = true;
+  setLedDrawing();
+  
+  // Calculate optimal font and get info about which one was chosen
+  const GFXfont* font = calculateOptimalFont(text);
+  String fontName;
+  
+  if (font == &FreeMonoBoldOblique18pt7b) {
+    fontName = "18pt Bold Italic";
+  } else if (font == &FreeMonoBoldOblique12pt7b) {
+    fontName = "12pt Bold Italic";
+  } else {
+    fontName = "9pt Bold Italic";
+  }
+  
+  Serial.print("Using font: ");
+  Serial.println(fontName);
+  
+  // Display the text using the selected font
+  display.setFullWindow();
+  display.firstPage();
+  
+  do {
+    display.fillScreen(GxEPD_WHITE);
+    displayWrappedText(text, font);
+  } while (display.nextPage());
+  
+  isDrawing = false;
+  setLedConnected();
+  
+  Serial.println("Text displayed successfully");
 }
