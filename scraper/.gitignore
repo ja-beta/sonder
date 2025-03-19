@@ -35,3 +35,4 @@ yarn-error.log*
 #arduino
 Microcontroller/e-paper-03/secrets.h
 secrets.h
+**/*secrets.h
