@@ -39,9 +39,9 @@ uint32_t lastDrawnHash = 0;
 bool displayDisconnected = false;
 
 
-#define LED_G 12  // Green pin (this might be wrong - figure out which one is which...)
+#define LED_G 12  // Green pin
 #define LED_B 13  // Blue pin
-#define LED_R 14  // Red pin
+#define LED_R 12  // Red pin
 
 bool isDrawing = false;  
 
