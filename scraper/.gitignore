@@ -31,9 +31,3 @@ yarn-error.log*
 
 # Environment files (local configs)
 /.env.*
-
-#arduino
-**/secrets.h
-secrets.h
-**/*secrets.h
-../*/secrets.h
