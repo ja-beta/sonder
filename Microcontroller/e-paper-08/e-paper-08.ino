@@ -464,31 +464,12 @@ void updatePartialArea(int x, int y, int w, int h, const char* message) {
 }
 
 bool checkDisplayConnection() {
-  // First check with pullup
   int busyState = digitalRead(EPD_BUSY);
   
-  // If BUSY is high (pullup active), display is definitely disconnected
   if (busyState == HIGH) {
     Serial.println("Display DISCONNECTED (BUSY pin high)");
     return false;
   }
-  
-  // If BUSY is low, try sending a command to confirm
-  digitalWrite(EPD_CS, LOW);
-  digitalWrite(EPD_DC, LOW);
-  SPI.transfer(0x71);  // Get status
-  digitalWrite(EPD_CS, HIGH);
-  
-  delay(5);
-  
-  // Check BUSY state again
-  busyState = digitalRead(EPD_BUSY);
-  bool connected = (busyState == LOW);
-  
-  Serial.print("Display detection - BUSY after command: ");
-  Serial.print(busyState);
-  Serial.print(" - Display ");
-  Serial.println(connected ? "CONNECTED" : "DISCONNECTED");
   
   return connected;
 }
@@ -517,15 +498,15 @@ void setLedColor(uint8_t r, uint8_t g, uint8_t b) {
 }
 
 void setLedConnected() {
-  setLedColor(20, 255, 20);  
+  setLedColor(250, 145, 25);  // light green
 }
 
 void setLedDisconnected() {
-  setLedColor(20, 20, 255);  
+  setLedColor(255, 80, 20);  // yellow
 }
 
 void setLedDrawing() {
-  setLedColor(255, 5, 5);  
+  setLedColor(255, 40, 5);  // orange
 }
 
 void testFontSizes() {
@@ -541,7 +522,6 @@ void testFontSizes() {
   displayText("The only way to do great work is to love what you do. If you haven't found it yet, keep looking. Don't settle. As with all matters of the heart, you'll know when you find it. -Steve Jobs");
 }
 
-// New function to display text and report font information
 void displayTextWithFontInfo(const char* text) {
   isDrawing = true;
   setLedDrawing();
