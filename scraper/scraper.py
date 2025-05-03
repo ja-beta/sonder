@@ -8,6 +8,8 @@ import time
 from requests.exceptions import RequestException, Timeout
 import argparse
 from datetime import datetime, timedelta
+import hashlib
+import re
 
 COLLECTION = QUOTES_COLLECTION
 
@@ -34,6 +36,51 @@ NEWS_SITES = {
         "article_link_pattern": "/world/",
         "base_url": "https://www.theguardian.com"
     },
+    "Al Jazeera": {
+        "url": "https://www.aljazeera.com/news/",
+        "article_link_pattern": "/news/",
+        "base_url": "https://www.aljazeera.com"
+    },
+    "Times of Israel": {
+        "url": "https://www.timesofisrael.com/",
+        "article_link_pattern": "/",
+        "base_url": "https://www.timesofisrael.com"
+    },
+    "The Independent": {
+        "url": "https://www.independent.co.uk/news/world",
+        "article_link_pattern": "/news/world/",
+        "base_url": "https://www.independent.co.uk"
+    },
+    "France 24": {
+        "url": "https://www.france24.com/en/",
+        "article_link_pattern": "/en/",
+        "base_url": "https://www.france24.com"
+    },
+    "Deutsche Welle": {
+        "url": "https://www.dw.com/en/top-stories/world/s-1429", 
+        "article_link_pattern": "/en/",
+        "base_url": "https://www.dw.com"
+    },
+    "Jerusalem Post": {
+        "url": "https://www.jpost.com/",
+        "article_link_pattern": "/",
+        "base_url": "https://www.jpost.com"
+    },
+    "The New Humanitarian": {
+        "url": "https://www.thenewhumanitarian.org/",
+        "article_link_pattern": "/",
+        "base_url": "https://www.thenewhumanitarian.org"
+    },
+    "Middle East Eye": {
+        "url": "https://www.middleeasteye.net/",
+        "article_link_pattern": "/news/",
+        "base_url": "https://www.middleeasteye.net"
+    },
+    "Foreign Policy": {
+        "url": "https://foreignpolicy.com/",
+        "article_link_pattern": "/",
+        "base_url": "https://foreignpolicy.com"
+    }
 }
 
 def get_article_links(site_name, site_config, timeout=10):
@@ -127,15 +174,22 @@ def search_keywords(article):
     content = article["content"].lower()
     title = article["title"].lower()
     
-    matches = {kw for kw in KEYWORDS if kw.lower() in content or kw.lower() in title}
+    matches = {kw for kw in KEYWORDS if kw.lower() in title or kw.lower() in content}
     
     if matches:
         print(f"Found keywords {matches} in article: {article['title']}")
         return list(matches)
     return None
 
+def normalize_quote(text):
+    text = text.lower().strip()
+    text = re.sub(r'\s+', ' ', text)
+    # Optionally: text = re.sub(r'[^\w\s]', '', text)
+    return text
 
-    
+def quote_id(text):
+    # Use a hash to avoid long document IDs
+    return hashlib.sha256(text.encode('utf-8')).hexdigest()
 
 def check_quote_exists(quote_text):
     """Check if quote already exists in Firebase"""
@@ -143,32 +197,20 @@ def check_quote_exists(quote_text):
     return len(docs) > 0
 
 def store_quotes(quotes, article_info, source):
-    """Store new quotes in Firebase with improved duplicate detection"""
+    """Store new quotes in Firebase using normalized hash as document ID to prevent duplicates"""
     batch = db.batch()
     stored_count = 0
-    
-    # Normalize quotes (trim whitespace, standardize case)
-    normalized_quotes = [q.strip() for q in quotes]
-    
-    # Check for existing quotes in the database
-    existing_quotes = set()
-    for quote in normalized_quotes:
-        docs = db.collection(COLLECTION).where("text", "==", quote).limit(1).get()
-        if len(docs) > 0:
-            existing_quotes.add(quote)
-    
-    # Process quotes, avoiding duplicates
-    for quote in normalized_quotes:
-        if quote in existing_quotes or not quote:
+
+    for quote in quotes:
+        norm_quote = normalize_quote(quote)
+        if not norm_quote:
             continue
-            
-        # Add to tracking set to prevent duplicates in this batch
-        existing_quotes.add(quote)
-        
-        # Add to database
-        quote_ref = db.collection(COLLECTION).document()
-        batch.set(quote_ref, {
-            "text": quote,
+        doc_id = quote_id(norm_quote)
+        doc_ref = db.collection(COLLECTION).document(doc_id)
+        if doc_ref.get().exists:
+            continue  # Already exists, skip
+        batch.set(doc_ref, {
+            "text": quote.strip(),
             "article_url": article_info["url"],
             "article_title": article_info["title"],
             "source": source,

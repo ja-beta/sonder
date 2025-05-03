@@ -12,7 +12,7 @@ start() {
     
     # Get collection parameter (default to quotes_v0 if not specified)
     #remember to also set the collection in the config.py files!!!!!
-    COLLECTION=${2:-"quotes_v6"}
+    COLLECTION=${2:-"quotes_v7"}
     echo "Using collection: $COLLECTION"
     
     # Delete the existing job (clean slate approach)
