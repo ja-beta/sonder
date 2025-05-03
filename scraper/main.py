@@ -3,7 +3,7 @@ from scraper import main as run_scraper
 from guardian_collector import main as run_guardian
 from process_quotes import main as process_quotes
 from scraper import clean_recent_duplicates
-from display_queue import add_to_queue
+from sonder_queue.display_queue import add_to_queue
 
 @functions_framework.http
 def run_pipeline(request):

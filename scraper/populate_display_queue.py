@@ -5,7 +5,11 @@ Used for testing the e-paper display functionality without running the full pipe
 from firebase_init import db
 from google.cloud import firestore
 import argparse
-from display_queue import add_to_queue
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), 'queue'))
+from sonder_queue.display_queue import add_to_queue 
+
 
 def main():
     # Parse command line arguments

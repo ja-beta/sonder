@@ -36,14 +36,27 @@ def serve_quote_api(request):
         # First check if we have any matches without a transaction
         docs = list(query.stream())
         if not docs:
-            return {'success': False, 'message': 'No quotes available'}
+            # No undisplayed quotes found - reset all quotes to undisplayed
+            print("Queue empty - resetting all quotes to undisplayed")
+            reset_count = 0
+            all_quotes = quotes_ref.stream()
+            for quote_doc in all_quotes:
+                quote_doc.reference.update({'displayed': False})
+                reset_count += 1
+            
+            print(f"Reset {reset_count} quotes to undisplayed")
+            
+            # Try again to get an undisplayed quote
+            docs = list(query.stream())
+            if not docs:
+                return {'success': False, 'message': 'No quotes available even after reset'}
         
         # Get the document
         doc = docs[0]
         doc_id = doc.id
         doc_data = doc.to_dict()
         
-        # Update it as a separate operation (not in transaction)
+        # Update it as a separate operation
         doc.reference.update({
             'displayed': True,
             'display_timestamp': firestore.SERVER_TIMESTAMP,
@@ -56,14 +69,13 @@ def serve_quote_api(request):
             'quote': doc_data.get('text', ''),
             'quote_id': doc_id
         }
-    
+        
     except Exception as e:
         # Log the full error
         error_details = traceback.format_exc()
         print(f"Error serving quote: {str(e)}")
         print(error_details)
         
-        # Return helpful error
         return {
             'success': False,
             'message': f"Server error: {str(e)}",

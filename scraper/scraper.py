@@ -19,11 +19,11 @@ NEWS_SITES = {
         "article_link_pattern": "/news/",
         "base_url": "https://www.bbc.com"
     },
-    "NPR": {
-        "url": "https://www.npr.org/sections/world/",
-        "article_link_pattern": "/sections/",
-        "base_url": "https://www.npr.org"
-    },
+    # "NPR": {
+    #     "url": "https://www.npr.org/sections/world/",
+    #     "article_link_pattern": "/sections/",
+    #     "base_url": "https://www.npr.org"
+    # },
     "AP News": {
         "url": "https://apnews.com/hub/world-news",
         "article_link_pattern": "/article/",

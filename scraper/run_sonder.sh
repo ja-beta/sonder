@@ -11,7 +11,8 @@ start() {
     echo "Starting quote pipeline..."
     
     # Get collection parameter (default to quotes_v0 if not specified)
-    COLLECTION=${2:-"quotes_v0"}
+    #remember to also set the collection in the config.py files!!!!!
+    COLLECTION=${2:-"quotes_v6"}
     echo "Using collection: $COLLECTION"
     
     # Delete the existing job (clean slate approach)
@@ -29,7 +30,7 @@ start() {
         --location="$REGION" \
         --project="${PROJECT_ID}"
 
-    echo "Quote pipeline started and scheduled to run every 5 minutes with collection: ${COLLECTION}"
+    echo "Quote pipeline started and scheduled to run every 20 minutes with collection: ${COLLECTION}"
 }
 
 stop() {
