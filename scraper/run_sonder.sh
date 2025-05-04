@@ -118,7 +118,7 @@ status() {
 test() {
     echo "Testing the pipeline with a single invocation..."
     
-    COLLECTION=${2:-"quotes_v0"}  # Default to quotes_v0
+    COLLECTION=${2:-"quotes_v7"}  # Default to quotes_v0
     
     echo "Using collection: $COLLECTION"
     

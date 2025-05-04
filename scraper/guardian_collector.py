@@ -5,6 +5,8 @@ from firebase_init import db
 from quote_extractor import QuoteExtractor
 import requests
 from google.cloud import firestore
+import hashlib
+import re
 
 load_dotenv()
 
@@ -70,31 +72,30 @@ class GuardianCollector:
             print(f"Error processing Guardian article: {e}")
             return None, None
     
+    def normalize_quote(self, text):
+        text = text.lower().strip()
+        text = re.sub(r'\s+', ' ', text)
+        #text = re.sub(r'[^\w\s]', '', text)
+        return text
+
+    def quote_id(self, text):
+        return hashlib.sha256(text.encode('utf-8')).hexdigest()
+
     def store_quotes(self, quotes, article_info):
-        """Store quotes in Firebase with duplicate prevention"""
+        """Store quotes in Firebase with duplicate prevention using hash-based document IDs"""
         batch = db.batch()
         stored_count = 0
-        
-        # Normalize quotes
-        normalized_quotes = [q.strip() for q in quotes]
-        
-        # Check for existing quotes
-        existing_quotes = set()
-        for quote in normalized_quotes:
-            docs = db.collection(COLLECTION_NAME).where("text", "==", quote).limit(1).get()
-            if len(docs) > 0:
-                existing_quotes.add(quote)
 
-        # Process unique quotes
-        for quote in normalized_quotes:
-            if quote in existing_quotes or not quote:
+        for quote in quotes:
+            norm_quote = self.normalize_quote(quote)
+            if not norm_quote:
                 continue
-            
-            existing_quotes.add(quote)
-            
-            quote_ref = db.collection(COLLECTION_NAME).document()
+            doc_id = self.quote_id(norm_quote)
+            quote_ref = db.collection(COLLECTION_NAME).document(doc_id)
+            if quote_ref.get().exists:
+                continue  # Already exists, skip
             batch.set(quote_ref, {
-                "text": quote,
+                "text": quote.strip(),
                 "article_url": article_info["url"],
                 "article_title": article_info["title"],
                 "source": "The Guardian",

@@ -5,6 +5,8 @@ from firebase_init import db
 from quote_extractor import QuoteExtractor
 import requests
 from google.cloud import firestore
+import hashlib
+import re
 
 load_dotenv()
 
@@ -66,24 +68,37 @@ class NYTCollector:
             print(f"Error processing NYT article: {e}")
             return None, None
     
+    def normalize_quote(self, text):
+        text = text.lower().strip()
+        text = re.sub(r'\s+', ' ', text)
+        #text = re.sub(r'[^\w\s]', '', text)
+        return text
+
+    def quote_id(self, text):
+        return hashlib.sha256(text.encode('utf-8')).hexdigest()
+
     def store_quotes(self, quotes, article_info):
         batch = db.batch()
         stored_count = 0
 
         for quote in quotes:
-            docs = db.collection(COLLECTION_NAME).where("text", "==", quote).limit(1).get()
-            if not len(docs):
-                quote_ref = db.collection(COLLECTION_NAME).document()
-                batch.set(quote_ref, {
-                    "text": quote,
-                    "article_url": article_info["url"],
-                    "article_title": article_info["title"],
-                    "source": "NYT",
-                    "timestamp": firestore.SERVER_TIMESTAMP,
-                    "score": None,
-                    "processed": False
-                })
-                stored_count += 1
+            norm_quote = self.normalize_quote(quote)
+            if not norm_quote:
+                continue
+            doc_id = self.quote_id(norm_quote)
+            quote_ref = db.collection(COLLECTION_NAME).document(doc_id)
+            if quote_ref.get().exists:
+                continue  # Already exists, skip
+            batch.set(quote_ref, {
+                "text": quote.strip(),
+                "article_url": article_info["url"],
+                "article_title": article_info["title"],
+                "source": "NYT",
+                "timestamp": firestore.SERVER_TIMESTAMP,
+                "score": None,
+                "processed": False
+            })
+            stored_count += 1
 
         if stored_count > 0:
             batch.commit()

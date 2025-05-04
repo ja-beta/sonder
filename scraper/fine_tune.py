@@ -28,8 +28,8 @@ def convert_ss():
 - 1: Somewhat memorable
 - 2: Haunting or unique
 
-Automatically give a score of 0 to the quote if it container Trump or names other world leaders, as well as country and city names.
-Calculate score as (sum of scores)/6
+Automatically give a score of 0 to the quote if it containes Trump or names other world leaders, as well as country and city names like Gaza, Israel, Ukraine, etc.
+Calculate final score as (sum of scores)/6
 Return only the final score as a number between 0 and 1."""
 
     for _, row in df.iterrows():

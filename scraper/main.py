@@ -2,8 +2,8 @@ import functions_framework
 from scraper import main as run_scraper
 from guardian_collector import main as run_guardian
 from process_quotes import main as process_quotes
-from scraper import clean_recent_duplicates
 from sonder_queue.display_queue import add_to_queue
+from firebase_init import db
 
 @functions_framework.http
 def run_pipeline(request):
@@ -25,6 +25,18 @@ def run_pipeline(request):
         else:
             from config import QUOTES_COLLECTION
             collection_name = QUOTES_COLLECTION
+            
+        print(f"Quote collection: {collection_name}")
+        
+        # Print information about existing data
+        try:
+            quotes_count = len(list(db.collection(collection_name).limit(1000).get()))
+            print(f"Current quotes in collection: approximately {quotes_count} (limited to 1000)")
+            
+            processed_urls_count = len(list(db.collection("processed_urls").limit(1000).get()))
+            print(f"Current processed URLs: approximately {processed_urls_count} (limited to 1000)")
+        except Exception as e:
+            print(f"Error checking collection stats: {e}")
         
         results = {
             "scraper": 0,
@@ -47,11 +59,20 @@ def run_pipeline(request):
         # Process quotes
         results["processed"] = process_quotes()
         
-        # Run a quick cleanup on recent quotes
-        results["duplicates_removed"] = clean_recent_duplicates(hours=1)
         
         # Add eligible quotes to display queue
         results["display_queue_added"] = add_to_queue(collection_name)
+        
+        # Print stats after run
+        try:
+            new_quotes_count = len(list(db.collection(collection_name).limit(1000).get()))
+            print(f"Quotes after run: approximately {new_quotes_count} (limited to 1000)")
+            
+            new_processed_urls_count = len(list(db.collection("processed_urls").limit(1000).get()))
+            print(f"Processed URLs after run: approximately {new_processed_urls_count} (limited to 1000)")
+            print(f"New processed URLs: approximately {new_processed_urls_count - processed_urls_count} (based on estimate)")
+        except Exception as e:
+            print(f"Error checking post-run stats: {e}")
         
         return {
             "success": True,

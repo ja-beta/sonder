@@ -52,6 +52,8 @@ def process_quotes(batch_size=100):
                         batch_processed += 1
                         print(f"\nProcessed quote: {quote_text}")
                         print(f"Score: {score}")
+                    else:
+                        print(f"Skipped quote (evaluate_quote returned None): {quote_text}")
                     
                     if batch_processed % 500 == 0:
                         batch.commit()

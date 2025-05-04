@@ -4,7 +4,7 @@ Module for managing the display queue of quotes for e-paper displays.
 from firebase_init import db
 from google.cloud import firestore
 
-def add_to_queue(quotes_collection, min_score=0.67):
+def add_to_queue(quotes_collection, min_score=0.83):
     """
     Add high-scoring quotes to the display queue.
     
